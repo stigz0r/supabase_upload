@@ -1,4 +1,8 @@
-const { Configuration, OpenAIApi } = require("openai");
+const OpenAI = require("openai");
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
 
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
@@ -17,11 +21,6 @@ exports.handler = async (event) => {
         body: JSON.stringify({ error: "No image URLs provided." })
       };
     }
-
-    const configuration = new Configuration({
-      apiKey: process.env.OPENAI_API_KEY
-    });
-    const openai = new OpenAIApi(configuration);
 
     const messages = [
       {
@@ -52,14 +51,14 @@ exports.handler = async (event) => {
       }
     ];
 
-    const response = await openai.createChatCompletion({
+    const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages,
       temperature: 0.7,
       max_tokens: 300
     });
 
-    const caption = response.data.choices[0].message.content.trim();
+    const caption = response.choices[0].message.content.trim();
 
     return {
       statusCode: 200,
