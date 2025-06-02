@@ -1,22 +1,28 @@
 import { Configuration, OpenAIApi } from "openai";
 
-export default async (req, res) => {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Only POST supported." });
+export const handler = async (event) => {
+  if (event.httpMethod !== "POST") {
+    return {
+      statusCode: 405,
+      body: JSON.stringify({ error: "Only POST supported." })
+    };
   }
-
-  const { image_urls } = req.body;
-
-  if (!Array.isArray(image_urls) || image_urls.length === 0) {
-    return res.status(400).json({ error: "No image URLs provided." });
-  }
-
-  const configuration = new Configuration({
-    apiKey: process.env.OPENAI_API_KEY
-  });
-  const openai = new OpenAIApi(configuration);
 
   try {
+    const { image_urls } = JSON.parse(event.body);
+
+    if (!Array.isArray(image_urls) || image_urls.length === 0) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "No image URLs provided." })
+      };
+    }
+
+    const configuration = new Configuration({
+      apiKey: process.env.OPENAI_API_KEY
+    });
+    const openai = new OpenAIApi(configuration);
+
     const messages = [
       {
         role: "system",
@@ -39,9 +45,10 @@ export default async (req, res) => {
       },
       {
         role: "user",
-        content: [
-          ...image_urls.map(url => ({ type: "image_url", image_url: { url } }))
-        ]
+        content: image_urls.map((url) => ({
+          type: "image_url",
+          image_url: { url }
+        }))
       }
     ];
 
@@ -53,9 +60,16 @@ export default async (req, res) => {
     });
 
     const caption = response.data.choices[0].message.content.trim();
-    res.status(200).json({ caption });
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ caption })
+    };
   } catch (err) {
     console.error(err.response?.data || err.message || err);
-    res.status(500).json({ error: "Failed to generate caption." });
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: "Caption generation failed." })
+    };
   }
 };
