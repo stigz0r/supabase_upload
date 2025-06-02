@@ -10,26 +10,18 @@
       max-width: 700px;
       margin: auto;
     }
-    h2 {
-      color: #226ce0;
-    }
-    input[type="file"] {
-      margin-bottom: 1rem;
-    }
+    h2 { color: #226ce0; }
+    input[type="file"] { margin-bottom: 1rem; }
     button {
       background: #226ce0;
       color: white;
       border: none;
       padding: 0.5rem 1rem;
       cursor: pointer;
+      margin-top: 1rem;
     }
-    ul {
-      list-style: none;
-      padding: 0;
-    }
-    li {
-      margin: 1rem 0;
-    }
+    ul { list-style: none; padding: 0; }
+    li { margin: 1rem 0; }
     .preview {
       display: flex;
       align-items: center;
@@ -59,14 +51,13 @@
 
   <h3>Generated Caption:</h3>
   <pre id="captionBox"></pre>
+  <button id="sendToDraftsBtn" onclick="sendToDrafts()">Send to Drafts</button>
 
   <script type="module">
     import { createClient } from "https://esm.sh/@supabase/supabase-js";
 
     const SUPABASE_URL = "https://qrlcmoywkrjlvmjqphan.supabase.co";
-    const SUPABASE_ANON_KEY =
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFybGNtb3l3a3JqbHZtanFwaGFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg3NTQ1ODUsImV4cCI6MjA2NDMzMDU4NX0.OtgoH9fTPQ4VnsMMg-zwFn4UgAAYSKsGKjN_PX3zVSE";
-
+    const SUPABASE_ANON_KEY = "your-anon-key";
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     const fileInput = document.getElementById("fileInput");
@@ -81,10 +72,8 @@
         reader.onload = (e) => {
           const div = document.createElement("div");
           div.className = "preview";
-          div.innerHTML = `
-            <img src="${e.target.result}" alt="${file.name}" />
-            <div>${file.name}</div>
-          `;
+          div.innerHTML = `<img src="${e.target.result}" alt="${file.name}" />
+            <div>${file.name}</div>`;
           previews.appendChild(div);
         };
         reader.readAsDataURL(file);
@@ -145,6 +134,36 @@
           captionBox.textContent = "❌ Error calling GPT.";
           console.error(err);
         }
+      }
+    }
+
+    async function sendToDrafts() {
+      const urls = Array.from(document.querySelectorAll("#output a")).map(a => a.href);
+      const caption = document.getElementById("captionBox").textContent.trim();
+
+      if (!urls.length || !caption) {
+        alert("Cannot send: missing image URLs or caption.");
+        return;
+      }
+
+      try {
+        const res = await fetch("https://stigz.app.n8n.cloud/webhook/send-to-drafts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            images: urls,
+            caption: caption
+          })
+        });
+
+        if (res.ok) {
+          alert("✅ Sent to drafts!");
+        } else {
+          alert("❌ Failed to send to drafts.");
+        }
+      } catch (err) {
+        console.error(err);
+        alert("❌ Error sending to drafts.");
       }
     }
 
