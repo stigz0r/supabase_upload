@@ -12,23 +12,11 @@
       padding: 2rem;
       max-width: 700px;
       margin: auto;
-      background: #f9f9f9;
     }
     h2 { color: var(--accent); }
     input[type="file"] {
-      display: none;
-    }
-    .custom-file-upload {
-      display: inline-block;
-      padding: 0.5rem 1rem;
-      cursor: pointer;
-      background-color: var(--accent);
-      color: white;
-      border-radius: 4px;
-      transition: background 0.3s;
-    }
-    .custom-file-upload:hover {
-      background-color: #1d5cc4;
+      margin-bottom: 1rem;
+      padding: 0.5rem;
     }
     button {
       background: var(--accent);
@@ -36,9 +24,9 @@
       border: none;
       padding: 0.5rem 1rem;
       cursor: pointer;
-      border-radius: 4px;
       margin-top: 1rem;
-      transition: background 0.3s, transform 0.2s;
+      border-radius: 4px;
+      transition: all 0.2s ease;
     }
     button:hover {
       background-color: #1d5cc4;
@@ -63,41 +51,18 @@
       padding: 1rem;
       border: 1px solid #ddd;
     }
-    #uploading, #captionLoading {
-      display: none;
-      margin-top: 1rem;
-      font-style: italic;
-      color: gray;
-    }
-    .spinner {
-      display: inline-block;
-      width: 18px;
-      height: 18px;
-      border: 3px solid #ccc;
-      border-top: 3px solid var(--accent);
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      vertical-align: middle;
-      margin-right: 8px;
-    }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
   </style>
 </head>
 <body>
   <h2>Upload Images to Supabase</h2>
-  <label for="fileInput" class="custom-file-upload">Choose Images</label>
   <input type="file" id="fileInput" multiple accept="image/*" />
   <div id="previews"></div>
-  <div id="uploading"><span class="spinner"></span>Uploading...</div>
   <button id="uploadButton">Upload</button>
 
   <ul id="output"></ul>
 
   <h3>Generated Caption:</h3>
   <pre id="captionBox"></pre>
-  <div id="captionLoading"><span class="spinner"></span>Generating caption...</div>
   <button id="sendToDraftsBtn" onclick="sendToDrafts()">Send to Drafts</button>
 
   <script type="module">
@@ -137,8 +102,6 @@
         return;
       }
 
-      document.getElementById("uploading").style.display = "block";
-
       const uploadedUrls = [];
 
       for (const file of files) {
@@ -167,11 +130,8 @@
         output.appendChild(li);
       }
 
-      document.getElementById("uploading").style.display = "none";
-
       if (uploadedUrls.length) {
-        captionBox.textContent = "";
-        document.getElementById("captionLoading").style.display = "block";
+        captionBox.textContent = "Generating caption...";
 
         try {
           const res = await fetch("/.netlify/functions/generate-caption", {
@@ -186,14 +146,12 @@
           captionBox.textContent = "❌ Error calling GPT.";
           console.error(err);
         }
-
-        document.getElementById("captionLoading").style.display = "none";
       }
     }
 
     async function sendToDrafts() {
       const urls = Array.from(document.querySelectorAll("#output a")).map(a => a.href);
-      const caption = captionBox.textContent.trim();
+      const caption = document.getElementById("captionBox").textContent.trim();
 
       if (!urls.length || !caption) {
         alert("Cannot send: missing image URLs or caption.");
