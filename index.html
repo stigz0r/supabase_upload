@@ -51,19 +51,43 @@
       padding: 1rem;
       border: 1px solid #ddd;
     }
+    .loader {
+      display: none;
+      margin-top: 10px;
+    }
+    .loader.active {
+      display: block;
+      font-style: italic;
+      color: gray;
+    }
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 3px solid #ccc;
+      border-top: 3px solid var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
   <h2>Upload Images to Supabase</h2>
   <input type="file" id="fileInput" multiple accept="image/*" />
-  <div id="previews"></div>
   <button id="uploadButton">Upload</button>
+  <div id="uploadingLoader" class="loader"><span class="spinner"></span>Uploading images...</div>
 
   <ul id="output"></ul>
-
-  <h3>Generated Caption:</h3>
   <pre id="captionBox"></pre>
-  <button id="sendToDraftsBtn" onclick="sendToDrafts()">Send to Drafts</button>
+  <div id="captionLoader" class="loader"><span class="spinner"></span>Generating caption...</div>
+
+  <button id="sendToDraftsBtn" style="display:none">Send to Drafts</button>
+  <div id="draftsLoader" class="loader"><span class="spinner"></span>Sending to drafts...</div>
 
   <script type="module">
     import { createClient } from "https://esm.sh/@supabase/supabase-js";
@@ -73,41 +97,23 @@
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     const fileInput = document.getElementById("fileInput");
-    const previews = document.getElementById("previews");
+    const uploadButton = document.getElementById("uploadButton");
     const output = document.getElementById("output");
     const captionBox = document.getElementById("captionBox");
+    const sendToDraftsBtn = document.getElementById("sendToDraftsBtn");
 
-    fileInput.addEventListener("change", () => {
-      previews.innerHTML = "";
-      for (const file of fileInput.files) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const div = document.createElement("div");
-          div.className = "preview";
-          div.innerHTML = `<img src="${e.target.result}" alt="${file.name}" />
-            <div>${file.name}</div>`;
-          previews.appendChild(div);
-        };
-        reader.readAsDataURL(file);
-      }
-    });
+    let uploadedImageURLs = [];
 
     async function uploadImages() {
       const files = fileInput.files;
+      uploadedImageURLs = [];
       output.innerHTML = "";
-      captionBox.textContent = "";
-
-      if (!files.length) {
-        alert("Please select at least one image.");
-        return;
-      }
-
-      const uploadedUrls = [];
+      captionBox.textContent = "Generating caption...";
+      document.getElementById("uploadingLoader").classList.add("active");
 
       for (const file of files) {
         const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
         const fileName = `images/${timestamp}-${file.name}`;
-
         const { data, error } = await supabase.storage
           .from("images")
           .upload(fileName, file, {
@@ -123,64 +129,55 @@
           const { data: urlData } = supabase.storage
             .from("images")
             .getPublicUrl(fileName);
-          li.innerHTML = `✅ Uploaded: <a href="${urlData.publicUrl}" target="_blank">${urlData.publicUrl}</a>`;
-          uploadedUrls.push(urlData.publicUrl);
+          uploadedImageURLs.push(urlData.publicUrl);
+          li.innerHTML = `<div class="preview"><img src="${urlData.publicUrl}" alt=""><span>${file.name}</span></div>`;
         }
 
         output.appendChild(li);
       }
 
-      if (uploadedUrls.length) {
-        captionBox.textContent = "Generating caption...";
+      document.getElementById("uploadingLoader").classList.remove("active");
+      await generateCaption();
+    }
 
-        try {
-          const res = await fetch("/.netlify/functions/generate-caption", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ image_urls: uploadedUrls })
-          });
+    async function generateCaption() {
+      document.getElementById("captionLoader").classList.add("active");
+      const response = await fetch("/.netlify/functions/generate-caption", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ image_urls: uploadedImageURLs })
+      });
 
-          const data = await res.json();
-          captionBox.textContent = data.caption || "⚠️ Caption generation failed.";
-        } catch (err) {
-          captionBox.textContent = "❌ Error calling GPT.";
-          console.error(err);
-        }
-      }
+      const data = await response.json();
+      document.getElementById("captionLoader").classList.remove("active");
+      captionBox.textContent = data.caption || "Failed to generate caption.";
+      sendToDraftsBtn.style.display = "inline-block";
     }
 
     async function sendToDrafts() {
-      const urls = Array.from(document.querySelectorAll("#output a")).map(a => a.href);
-      const caption = document.getElementById("captionBox").textContent.trim();
+      document.getElementById("draftsLoader").classList.add("active");
+      const res = await fetch("https://stigz.app.n8n.cloud/webhook/send-to-drafts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          images: uploadedImageURLs,
+          caption: captionBox.textContent.trim()
+        })
+      });
 
-      if (!urls.length || !caption) {
-        alert("Cannot send: missing image URLs or caption.");
-        return;
-      }
+      document.getElementById("draftsLoader").classList.remove("active");
 
-      try {
-        const res = await fetch("https://stigz.app.n8n.cloud/webhook/send-to-drafts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            images: urls,
-            caption: caption
-          })
-        });
-
-        if (res.ok) {
-          alert("✅ Sent to drafts!");
-        } else {
-          alert("❌ Failed to send to drafts.");
-        }
-      } catch (err) {
-        console.error(err);
-        alert("❌ Error sending to drafts.");
+      if (res.ok) {
+        alert("✅ Sent to drafts!");
+      } else {
+        alert("❌ Failed to send.");
       }
     }
 
-    document.getElementById("uploadButton").addEventListener("click", uploadImages);
-    window.sendToDrafts = sendToDrafts;
+    uploadButton.onclick = uploadImages;
+    sendToDraftsBtn.onclick = sendToDrafts;
   </script>
 </body>
 </html>
