@@ -155,7 +155,7 @@
         const data = await response.json();
         document.getElementById("captionLoader").classList.remove("active");
 
-        captionBox.textContent = data.response?.body?.caption || "Failed to generate caption.";
+        captionBox.textContent = data.caption || "Failed to generate caption.";
         sendToDraftsBtn.style.display = "inline-block";
       } catch (err) {
         document.getElementById("captionLoader").classList.remove("active");
