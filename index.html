@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>Supabase Image Uploader</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet" />
   <style>
     :root {
       --accent: #226ce0;
@@ -13,7 +14,13 @@
       max-width: 700px;
       margin: auto;
     }
-    h2 { color: var(--accent); }
+    h2 {
+      color: var(--accent);
+      font-family: 'Poppins', sans-serif;
+      font-weight: 600;
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
     input[type="file"] {
       margin-bottom: 1rem;
       padding: 0.5rem;
@@ -28,12 +35,22 @@
       border-radius: 4px;
       transition: all 0.2s ease;
     }
-    button:hover {
+    button[disabled] {
+      background: #999;
+      cursor: default;
+      opacity: 0.6;
+    }
+    button:hover:not([disabled]) {
       background-color: #1d5cc4;
       transform: translateY(-1px);
     }
-    ul { list-style: none; padding: 0; }
-    li { margin: 1rem 0; }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      margin: 1rem 0;
+    }
     .preview {
       display: flex;
       align-items: center;
@@ -50,15 +67,16 @@
       background: #f6f6f6;
       padding: 1rem;
       border: 1px solid #ddd;
+      margin-top: 1rem;
     }
     .loader {
       display: none;
       margin-top: 10px;
+      color: gray;
+      font-style: italic;
     }
     .loader.active {
       display: block;
-      font-style: italic;
-      color: gray;
     }
     .spinner {
       display: inline-block;
@@ -74,116 +92,170 @@
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
+    .send-bar-container {
+      display: none;
+      margin-left: 0.5rem;
+      vertical-align: middle;
+    }
+    .send-bar {
+      width: 120px;
+      height: 10px;
+      background: #ccc;
+      border-radius: 5px;
+      overflow: hidden;
+      display: inline-block;
+    }
+    .send-bar-inner {
+      width: 0%;
+      height: 100%;
+      background: var(--accent);
+    }
+    @keyframes fillBar {
+      from { width: 0%; }
+      to { width: 100%; }
+    }
   </style>
 </head>
 <body>
-  <h2>Upload Images to Supabase</h2>
+  <h2>draftbook</h2>
   <input type="file" id="fileInput" multiple accept="image/*" />
   <button id="uploadButton">Upload</button>
-  <div id="uploadingLoader" class="loader"><span class="spinner"></span>Uploading images...</div>
-
+  <div id="uploadingLoader" class="loader">
+    <span class="spinner"></span>Uploading images...
+  </div>
   <ul id="output"></ul>
   <pre id="captionBox"></pre>
-  <div id="captionLoader" class="loader"><span class="spinner"></span>Generating caption...</div>
-
-  <button id="sendToDraftsBtn" style="display:none">Send to Drafts</button>
-  <div id="draftsLoader" class="loader"><span class="spinner"></span>Sending to drafts...</div>
-
+  <div id="captionLoader" class="loader">
+    <span class="spinner"></span>Generating caption...
+  </div>
+  <button id="sendToDraftsBtn" disabled style="display:none">Send to Drafts</button>
+  <div id="sendLoader" class="send-bar-container">
+    <div class="send-bar">
+      <div class="send-bar-inner"></div>
+    </div>
+  </div>
+  <div id="draftsLoader" class="loader">
+    <span class="spinner"></span>Sending to drafts...
+  </div>
   <script type="module">
     import { createClient } from "https://esm.sh/@supabase/supabase-js";
-
     const SUPABASE_URL = "https://qrlcmoywkrjlvmjqphan.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFybGNtb3l3a3JqbHZtanFwaGFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg3NTQ1ODUsImV4cCI6MjA2NDMzMDU4NX0.OtgoH9fTPQ4VnsMMg-zwFn4UgAAYSKsGKjN_PX3zVSE";
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
     const fileInput = document.getElementById("fileInput");
     const uploadButton = document.getElementById("uploadButton");
     const output = document.getElementById("output");
     const captionBox = document.getElementById("captionBox");
     const sendToDraftsBtn = document.getElementById("sendToDraftsBtn");
-
+    const sendLoader = document.getElementById("sendLoader");
+    const uploadingLoader = document.getElementById("uploadingLoader");
+    const captionLoader = document.getElementById("captionLoader");
+    const draftsLoader = document.getElementById("draftsLoader");
     let uploadedImageURLs = [];
-
     async function uploadImages() {
       const files = fileInput.files;
       uploadedImageURLs = [];
       output.innerHTML = "";
-      captionBox.textContent = "Generating caption...";
-      document.getElementById("uploadingLoader").classList.add("active");
-
+      captionBox.textContent = "";
+      sendToDraftsBtn.style.display = "none";
+      sendLoader.style.display = "none";
+      draftsLoader.classList.remove("active");
+      uploadingLoader.classList.add("active");
       for (const file of files) {
         const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
         const fileName = `images/${timestamp}-${file.name}`;
-        const { data, error } = await supabase.storage
-          .from("images")
-          .upload(fileName, file, {
-            contentType: file.type,
-            upsert: false
-          });
-
+        const { data, error } = await supabase.storage.from("images").upload(fileName, file, {
+          contentType: file.type,
+          upsert: false
+        });
         const li = document.createElement("li");
-
         if (error) {
           li.textContent = `❌ Error uploading ${file.name}: ${error.message}`;
         } else {
-          const { data: urlData } = supabase.storage
-            .from("images")
-            .getPublicUrl(fileName);
+          const { data: urlData } = supabase.storage.from("images").getPublicUrl(fileName);
           uploadedImageURLs.push(urlData.publicUrl);
-          li.innerHTML = `<div class="preview"><img src="${urlData.publicUrl}" alt=""><span>${file.name}</span></div>`;
+          li.innerHTML = `
+            <div class="preview">
+              <img src="${urlData.publicUrl}" alt="">
+              <span>${file.name}</span>
+            </div>`;
         }
-
         output.appendChild(li);
       }
-
-      document.getElementById("uploadingLoader").classList.remove("active");
+      uploadingLoader.classList.remove("active");
       await generateCaption();
     }
-
     async function generateCaption() {
-      document.getElementById("captionLoader").classList.add("active");
+  // 1) Show the “Generating caption…” spinner:
+  captionLoader.classList.add("active");
 
-      try {
-        const response = await fetch("https://stigz.app.n8n.cloud/webhook/start-caption", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ images: uploadedImageURLs })
-        });
+  try {
+    // 2) POST the array of uploadedImageURLs to n8n’s start‐caption webhook
+    const response = await fetch("https://stigz.app.n8n.cloud/webhook/start-caption", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ images: uploadedImageURLs }),
+    });
 
-        const data = await response.json();
-        document.getElementById("captionLoader").classList.remove("active");
+    // 3) Parse the JSON body (Respond to Webhook now returns { caption: "...", resumeUrl: "..." }):
+    const data = await response.json();
+    captionLoader.classList.remove("active");
 
-        captionBox.textContent = data.caption || "Failed to generate caption.";
-        sendToDraftsBtn.style.display = "inline-block";
-      } catch (err) {
-        document.getElementById("captionLoader").classList.remove("active");
-        captionBox.textContent = "❌ Error calling n8n.";
-        console.error(err);
-      }
+    // 4) Display the generated caption in the <pre id="captionBox">
+    if (data.caption) {
+      captionBox.textContent = data.caption;
+    } else {
+      captionBox.textContent = "Failed to generate caption.";
     }
 
-    async function sendToDrafts() {
-      document.getElementById("draftsLoader").classList.add("active");
-      const res = await fetch("https://stigz.app.n8n.cloud/webhook/send-to-drafts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          images: uploadedImageURLs,
-          caption: captionBox.textContent.trim()
-        })
-      });
+    // 5) Store the resumeUrl (for later use when “Send to Drafts” is clicked):
+    window.resumeUrl = data.resumeUrl;
+    console.log("▶ resumeUrl (saved):", window.resumeUrl);
 
-      document.getElementById("draftsLoader").classList.remove("active");
+    // 6) Reveal the “Send to Drafts” button, but keep it disabled for 10 seconds:
+    sendToDraftsBtn.style.display = "inline-block";
+    sendToDraftsBtn.disabled = true;
 
-      if (res.ok) {
-        alert("✅ Sent to drafts!");
-      } else {
-        alert("❌ Failed to send.");
-      }
+    // 7) Animate the 10-second progress bar:
+    sendLoader.style.display = "inline-block";
+    const barInner = document.querySelector(".send-bar-inner");
+    barInner.style.animation = "none";    // reset any prior run
+    void barInner.offsetWidth;             // force reflow to restart animation
+    barInner.style.animation = "fillBar 10s linear forwards";
+
+    // 8) After 10 seconds, hide the bar and enable the button:
+    setTimeout(() => {
+      sendLoader.style.display = "none";
+      sendToDraftsBtn.disabled = false;
+    }, 10000);
+
+  } catch (err) {
+    captionLoader.classList.remove("active");
+    captionBox.textContent = "❌ Error calling n8n.";
+    console.error(err);
+  }
+}
+async function sendToDrafts() {
+  draftsLoader.classList.add("active");
+  try {
+    // If generateCaption() ran successfully, window.resumeUrl should be set.
+    if (!window.resumeUrl) {
+      throw new Error("No resumeUrl available; cannot resume the workflow.");
     }
-
+    // Hitting this URL “wakes up” the n8n Wait node.
+    const res = await fetch(window.resumeUrl, { method: "GET" });
+    draftsLoader.classList.remove("active");
+    if (res.ok) {
+      alert("✅ Draft created! (Wait node resumed.)");
+    } else {
+      alert("❌ Failed to resume Wait node.");
+    }
+  } catch (err) {
+    draftsLoader.classList.remove("active");
+    alert("❌ Error sending to n8n: " + err.message);
+    console.error(err);
+  }
+}
     uploadButton.onclick = uploadImages;
     sendToDraftsBtn.onclick = sendToDrafts;
   </script>
