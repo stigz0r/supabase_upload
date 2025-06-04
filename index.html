@@ -243,7 +243,7 @@ async function sendToDrafts() {
       throw new Error("No resumeUrl available; cannot resume the workflow.");
     }
     // Hitting this URL “wakes up” the n8n Wait node.
-    const res = await fetch(window.resumeUrl, { method: "GET" });
+    const res = await fetch(`/.netlify/functions/resume-draft?url=${encodeURIComponent(window.resumeUrl)}`);
     draftsLoader.classList.remove("active");
     if (res.ok) {
       alert("✅ Draft created! (Wait node resumed.)");
